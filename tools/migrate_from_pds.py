@@ -15,15 +15,35 @@ Safe to re-run: uses INSERT OR IGNORE so duplicates are skipped.
 """
 
 import argparse
-import sys
-import os
-
-import urllib.request
-import urllib.error
 import json
+import os
+import sqlite3
+import urllib.parse
+import urllib.request
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from app.db import init_db, insert_note
+
+def init_db(db_path):
+    with sqlite3.connect(db_path) as con:
+        con.executescript("""
+            CREATE TABLE IF NOT EXISTS notes (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                rkey       TEXT UNIQUE NOT NULL,
+                text       TEXT NOT NULL,
+                service    TEXT DEFAULT 'claude-code',
+                tags       TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_created_at ON notes(created_at DESC);
+        """)
+
+
+def insert_note(db_path, rkey, text, service, tags, created_at):
+    with sqlite3.connect(db_path) as con:
+        cur = con.execute(
+            "INSERT OR IGNORE INTO notes (rkey, text, service, tags, created_at) VALUES (?,?,?,?,?)",
+            (rkey, text, service, tags, created_at),
+        )
+        return cur.lastrowid
 
 
 def _post_json(url, payload):
@@ -42,9 +62,6 @@ def _get_json(url, headers=None, params=None):
     req = urllib.request.Request(url, headers=headers or {})
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read())
-
-
-import urllib.parse
 
 
 def create_session(pds_url, handle, password):
@@ -112,10 +129,7 @@ def main():
         service = val.get("service", "claude-code")
 
         raw_tags = val.get("tags", "")
-        if isinstance(raw_tags, list):
-            tags = ",".join(raw_tags)
-        else:
-            tags = str(raw_tags)
+        tags = ",".join(raw_tags) if isinstance(raw_tags, list) else str(raw_tags)
 
         created_at = val.get("createdAt", "")
 
