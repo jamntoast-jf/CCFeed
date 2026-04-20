@@ -1,0 +1,28 @@
+services:
+  labnotes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - /app/env
+      - ./:/app
+      - /home/justine/data/LabNoteFeed:/data
+    env_file: .env
+    ports:
+      - 8000
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.labnotes.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`)
+      - traefik.http.routers.labnotes.tls=true
+      - traefik.http.routers.labnotes.entrypoints=web,websecure
+      - traefik.http.routers.labnotes.tls.certresolver=mytlschallenge
+      - traefik.http.middlewares.labnotes.headers.SSLRedirect=true
+      - traefik.http.middlewares.labnotes.headers.STSSeconds=315360000
+      - traefik.http.middlewares.labnotes.headers.browserXSSFilter=true
+      - traefik.http.middlewares.labnotes.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.labnotes.headers.forceSTSHeader=true
+      - traefik.http.middlewares.labnotes.headers.SSLHost=
+      - traefik.http.middlewares.labnotes.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.labnotes.headers.STSPreload=true
+      - traefik.http.routers.labnotes.middlewares=labnotes@docker

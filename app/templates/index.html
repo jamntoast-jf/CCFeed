@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{# ── Top Panel: Stats + Calendar side by side on desktop ── #}
+<div class="top-panel">
+
+{# Stats Widget #}
+{% if stats %}
+<div class="stats-widget">
+  <div class="stat-block">
+    <span class="stat-value">{{ stats.total }}</span>
+    <span class="stat-label">total posts</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-block">
+    <span class="stat-value">{{ stats.avg_per_day }}</span>
+    <span class="stat-label">avg / day</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-top-days">
+    <span class="stat-label">top days</span>
+    {% set max_count = stats.top_days[0][1] if stats.top_days else 1 %}
+    {% for day, count in stats.top_days %}
+    <div class="stat-day-row">
+      <a class="stat-day-date" href="{{ url_for('main.index', day=day.isoformat(), month=day.strftime('%Y-%m')) }}">{{ day.strftime('%b %d') }}</a>
+      <div class="stat-day-bar-wrap">
+        <div class="stat-day-bar" style="width: {{ (count / max_count * 120) | int }}px"></div>
+        <span class="stat-day-count">{{ count }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if stats.cost %}
+  <div class="stat-divider"></div>
+  <div class="stat-cost">
+    <span class="stat-label">cost ({{ stats.cost.n }} priced)</span>
+    <div class="stat-cost-row">
+      <span class="stat-cost-label">avg</span>
+      <span class="stat-cost-value">${{ stats.cost.avg }}</span>
+    </div>
+    <div class="stat-cost-row">
+      <span class="stat-cost-label">top</span>
+      <a class="stat-cost-value stat-cost-link" href="{{ url_for('main.index', note=stats.cost.top_rkey, month=month_str, day=day_str) }}#{{ stats.cost.top_rkey }}">${{ stats.cost.top }}</a>
+      <span class="stat-cost-note" title="{{ stats.cost.top_text_full }}">{{ stats.cost.top_date }} — {{ stats.cost.top_text }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# Calendar #}
+<div class="cal-widget">
+  <div class="cal-header">
+    <a class="btn btn-sm btn-ghost" href="{{ url_for('main.index', month=cal_prev, note=highlight) }}">←</a>
+    <span class="cal-month-title">{{ cal_month.strftime('%B %Y') }}</span>
+    <a class="btn btn-sm btn-ghost" href="{{ url_for('main.index', month=cal_next, note=highlight) }}">→</a>
+  </div>
+  <div class="cal-grid">
+    {% for dow in ['Su','Mo','Tu','We','Th','Fr','Sa'] %}
+      <div class="cal-dow">{{ dow }}</div>
+    {% endfor %}
+    {% for week in cal_weeks %}
+      {% for d in week %}
+        {% set in_month = d.month == cal_month.month %}
+        {% set count = day_counts.get(d, 0) %}
+        {% set is_sel = day_str == d.isoformat() %}
+        {% if in_month and count %}
+          <a class="cal-day{% if is_sel %} cal-day-sel{% endif %}"
+             href="{{ url_for('main.index', month=d.strftime('%Y-%m'), day=d.isoformat(), note=highlight) }}">
+            <span class="cal-day-num">{{ d.day }}</span>
+            <span class="cal-day-count">{{ count }}</span>
+          </a>
+        {% elif in_month %}
+          <div class="cal-day">
+            <span class="cal-day-num">{{ d.day }}</span>
+          </div>
+        {% else %}
+          <div class="cal-day cal-day-out"></div>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% if day_str %}
+  <div class="cal-filter-info">
+    <span>{{ total_filtered }} post{{ 's' if total_filtered != 1 }} on {{ day_str }}</span>
+    <a href="{{ url_for('main.index', month=month_str, note=highlight) }}" class="btn btn-sm btn-ghost">Clear</a>
+  </div>
+  {% endif %}
+</div>
+
+</div>{# /top-panel #}
+
+{# ── Feed ── #}
+{% if error %}
+  <div class="error-box">{{ error }}</div>
+{% elif notes %}
+  <div class="feed">
+    {% for note in notes %}
+    <div class="note{% if highlight and note.rkey == highlight %} note-highlight{% endif %}" id="{{ note.rkey }}">
+      <div class="note-meta">
+        <span class="note-time" data-utc="{{ note.createdAt }}">{{ note.createdAt[:16] | replace("T", " ") }}</span>
+
+        {% if note.service %}
+          <span class="badge badge-service">{{ note.service }}</span>
+        {% endif %}
+
+        {% if note.severity and note.severity != "info" %}
+          <span class="sev-{{ note.severity }}">{{ note.severity }}</span>
+        {% endif %}
+
+        {% for tag in (note.tags or []) %}
+          <span class="badge badge-tag">#{{ tag }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="note-text">{{ note.text }}</div>
+
+      {% if note.host %}
+        <div class="note-host">@ {{ note.host }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="pagination">
+    {% if page > 1 %}
+      <a class="btn" href="{{ url_for('main.index', page=page-1, month=month_str, day=day_str) }}">← Newer</a>
+    {% else %}
+      <span class="btn btn-disabled">← Newer</span>
+    {% endif %}
+
+    <span class="page-info">Page {{ page }} / {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+      <a class="btn" href="{{ url_for('main.index', page=page+1, month=month_str, day=day_str) }}">Older →</a>
+    {% else %}
+      <span class="btn btn-disabled">Older →</span>
+    {% endif %}
+  </div>
+
+{% else %}
+  <p class="empty">No notes found.</p>
+{% endif %}
+
+<script>
+(function () {
+  const pad = n => String(n).padStart(2, '0');
+  document.querySelectorAll('[data-utc]').forEach(el => {
+    const d = new Date(el.dataset.utc);
+    if (!isNaN(d)) {
+      el.textContent = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+  });
+})();
+</script>
+{% endblock %}
